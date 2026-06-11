@@ -29,6 +29,9 @@ def benchmark_operation(backend, operation: str, batch_size: int, message_size: 
         start = time.perf_counter()
         for _ in range(batch_size):
             backend.keygen()
+        if "gpu" in backend.name():
+            import pycuda.driver as cuda
+            cuda.Context.synchronize()
         end = time.perf_counter()
 
     elif operation == "sign":
@@ -37,6 +40,9 @@ def benchmark_operation(backend, operation: str, batch_size: int, message_size: 
         start = time.perf_counter()
         for msg in messages:
             backend.sign(sk, msg)
+        if "gpu" in backend.name():
+            import pycuda.driver as cuda
+            cuda.Context.synchronize()
         end = time.perf_counter()
 
     elif operation == "verify":
@@ -44,6 +50,9 @@ def benchmark_operation(backend, operation: str, batch_size: int, message_size: 
         signatures = [backend.sign(sk, msg) for msg in messages]
         start = time.perf_counter()
         ok = [backend.verify(pk, msg, sig) for msg, sig in zip(messages, signatures)]
+        if "gpu" in backend.name():
+            import pycuda.driver as cuda
+            cuda.Context.synchronize()
         end = time.perf_counter()
         if not all(ok):
             raise RuntimeError(f"verification failed during benchmark for {backend.scheme_name}")
@@ -70,12 +79,27 @@ def get_backends(selected_schemes: List[str], height: int):
 
     if "lamport" in selected_schemes:
         backends.append(LamportCPUBackend())
+        try:
+            from hashsig.gpu_backend import LamportGPUBackend
+            backends.append(LamportGPUBackend())
+        except ImportError:
+            pass
 
     if "lms" in selected_schemes:
         backends.append(LMSCPUBackend(height=height))
+        try:
+            from hashsig.gpu_backend import LMSGPUBackend
+            backends.append(LMSGPUBackend(height=height))
+        except ImportError:
+            pass
 
     if "sphincs" in selected_schemes:
         backends.append(SimpleSPHINCSCPUBackend(height=height))
+        try:
+            from hashsig.gpu_backend import SimpleSPHINCSGPUBackend
+            backends.append(SimpleSPHINCSGPUBackend(height=height))
+        except ImportError:
+            pass
 
     return backends
 
